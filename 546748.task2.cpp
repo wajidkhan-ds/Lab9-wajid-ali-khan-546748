@@ -1,95 +1,143 @@
 #include <iostream>
-#include <iomanip>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <cctype>
 using namespace std;
 
-const int MAXN = 20;
-int board[MAXN][MAXN];
-int N;
+struct WordNode {
+    string word;
+    int count;
+    WordNode* left;
+    WordNode* right;
 
-int dx[8] = { 2, 1, -1, -2, -2, -1,  1,  2 };
-int dy[8] = { 1, 2,  2,  1, -1, -2, -2, -1 };
+    WordNode(string w) {
+        word = w;
+        count = 1;
+        left = NULL;
+        right = NULL;
+    }
+};
 
-bool ok(int x, int y) {
-    return x >= 0 && x < N && y >= 0 && y < N && board[x][y] == -1;
-}
+class WordBST {
+public:
+    WordNode* root;
+    int totalWords;
+    int uniqueWords;
 
-// ----- Part 1: Plain backtracking -----
-bool tour(int x, int y, int step) {
-    if (step == N * N) return true;
-    for (int k = 0; k < 8; k++) {
-        int nx = x + dx[k], ny = y + dy[k];
-        if (ok(nx, ny)) {
-            board[nx][ny] = step;
-            if (tour(nx, ny, step + 1)) return true;
-            board[nx][ny] = -1;
+    WordBST() {
+        root = NULL;
+        totalWords = 0;
+        uniqueWords = 0;
+    }
+
+    // lowercase + strip non-letters
+    string cleanWord(string w) {
+        string result = "";
+        for (int i = 0; i < (int)w.size(); i++) {
+            char c = w[i];
+            if (isalpha(c))
+                result += tolower(c);
         }
-    }
-    return false;
-}
-
-// ----- Part 2: Warnsdorff-optimized (≈ O(N²)) -----
-int onwardCount(int x, int y) {
-    int c = 0;
-    for (int k = 0; k < 8; k++)
-        if (ok(x + dx[k], y + dy[k])) c++;
-    return c;
-}
-
-bool tourFast(int x, int y, int step) {
-    if (step == N * N) return true;
-
-    int cand[8], count = 0;
-    for (int k = 0; k < 8; k++) {
-        int nx = x + dx[k], ny = y + dy[k];
-        if (ok(nx, ny)) cand[count++] = k;
+        return result;
     }
 
-    // Selection sort candidates by onward count (fewest first)
-    for (int i = 0; i < count - 1; i++) {
-        int best = i;
-        for (int j = i + 1; j < count; j++) {
-            int a = cand[j], b = cand[best];
-            if (onwardCount(x + dx[a], y + dy[a]) <
-                onwardCount(x + dx[b], y + dy[b]))
-                best = j;
+    WordNode* insert(WordNode* node, string w) {
+        if (node == NULL) {
+            uniqueWords++;
+            return new WordNode(w);
         }
-        int tmp = cand[i]; cand[i] = cand[best]; cand[best] = tmp;
+
+        if (w < node->word)
+            node->left = insert(node->left, w);
+        else if (w > node->word)
+            node->right = insert(node->right, w);
+        else
+            node->count++;
+
+        return node;
     }
 
-    for (int i = 0; i < count; i++) {
-        int k = cand[i];
-        int nx = x + dx[k], ny = y + dy[k];
-        board[nx][ny] = step;
-        if (tourFast(nx, ny, step + 1)) return true;
-        board[nx][ny] = -1;
+    void insert(string w) {
+        totalWords++;
+        root = insert(root, w);
     }
-    return false;
-}
 
-void printBoard() {
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++)
-            cout << setw(3) << board[i][j] << " ";
-        cout << "\n";
+    void displayAlphabetical(WordNode* node) {
+        if (node == NULL) return;
+        displayAlphabetical(node->left);
+        cout << node->word << " : " << node->count << endl;
+        displayAlphabetical(node->right);
     }
-}
+
+    void collectNodes(WordNode* node, vector<WordNode*>& list) {
+        if (node == NULL) return;
+        collectNodes(node->left, list);
+        list.push_back(node);
+        collectNodes(node->right, list);
+    }
+
+    void displayByFrequency() {
+        vector<WordNode*> list;
+        collectNodes(root, list);
+
+        sort(list.begin(), list.end(), [](WordNode* a, WordNode* b) {
+            return a->count > b->count;
+        });
+
+        for (int i = 0; i < (int)list.size(); i++)
+            cout << list[i]->word << " : " << list[i]->count << endl;
+    }
+
+    void findMostFrequentWord() {
+        vector<WordNode*> list;
+        collectNodes(root, list);
+
+        if (list.empty()) return;
+
+        int maxCount = 0;
+        for (int i = 0; i < (int)list.size(); i++)
+            if (list[i]->count > maxCount)
+                maxCount = list[i]->count;
+
+        cout << "Most frequent word(s) [count = " << maxCount << "]: ";
+        for (int i = 0; i < (int)list.size(); i++)
+            if (list[i]->count == maxCount)
+                cout << list[i]->word << " ";
+        cout << endl;
+    }
+};
 
 int main() {
-    int sx, sy;
-    cout << "N: ";          cin >> N;
-    cout << "Start x y: ";  cin >> sx >> sy;
+    string paragraph = "the quick brown fox jumps over the lazy dog. The fox is quick and smart.";
 
-    for (int i = 0; i < N; i++)
-        for (int j = 0; j < N; j++)
-            board[i][j] = -1;
+    WordBST tree;
 
-    board[sx][sy] = 0;
-
-    if (tourFast(sx, sy, 1)) {
-        cout << "\nTour found:\n";
-        printBoard();
-    } else {
-        cout << "No tour from this square.\n";
+    string current = "";
+    for (int i = 0; i <= (int)paragraph.size(); i++) {
+        if (i == (int)paragraph.size() || paragraph[i] == ' ') {
+            if (!current.empty()) {
+                string cleaned = tree.cleanWord(current);
+                if (!cleaned.empty())
+                    tree.insert(cleaned);
+                current = "";
+            }
+        } else {
+            current += paragraph[i];
+        }
     }
+
+    cout << "Alphabetical order:\n";
+    tree.displayAlphabetical(tree.root);
+
+    cout << "\nSorted by frequency (high to low):\n";
+    tree.displayByFrequency();
+
+    cout << "\n";
+    tree.findMostFrequentWord();
+
+    cout << "\nTotal unique words: " << tree.uniqueWords << endl;
+    cout << "Total word count:   " << tree.totalWords << endl;
+
     return 0;
 }
